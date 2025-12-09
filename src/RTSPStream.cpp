@@ -1,5 +1,18 @@
 #include "RTSPStream.hpp"
 
+RTSPStream::RTSPStream() {}
+
+RTSPStream::~RTSPStream() {
+    running_ = false;
+    if (capture_thread_.joinable()) {
+        capture_thread_.join();
+        std::cout << "Try to close stream from " + ip_address_ + ":" + port_
+                  << std::endl;
+        stream_.release();
+        std::cout << "Stream succesfully closed!" << std::endl;
+    }
+}
+
 void RTSPStream::SetLogin(const std::string& login) { login_ = login; }
 
 void RTSPStream::SetPassword(const std::string& password) {
@@ -22,6 +35,10 @@ bool RTSPStream::Initialize() {
         std::cout << "Try to create a rtsp stream from " + ip_address_ + ":" +
                          port_ + "/" + source_
                   << std::endl;
+
+        putenv(std::string("OPENCV_FFMPEG_CAPTURE_OPTIONS=rtsp_transport;tcp")
+                   .data());
+
         if (Connect()) {
             std::cout << "Succesfully create rtsp stream from " + ip_address_ +
                              ":" + port_ + "/" + source_
@@ -87,27 +104,58 @@ bool RTSPStream::Connect(int timeout_ms) {
 
 void RTSPStream::Reconnect() {
     std::lock_guard<std::mutex> lock(frame_mutex_);
-    // stream_.release();
-    stream_.open(rtsp_url_, cv::CAP_FFMPEG);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    connected_ = false;
 
     if (stream_.isOpened()) {
-        std::cout << "Reconnected to: " << ip_address_ + ":" + port_
-                  << std::endl;
+        stream_.release();
+    }
+
+    std::cout << "Try to reconnect to stream from " << ip_address_ + ":" + port_
+              << std::endl;
+
+    for (int attempt = 0; attempt < reconnect_attempts_; ++attempt) {
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(reconnect_times_[attempt]));
+
+        try {
+            stream_.open(stream_full_url_, cv::CAP_FFMPEG);
+            stream_.set(cv::CAP_PROP_OPEN_TIMEOUT_MSEC, open_timeout_ms_);
+            stream_.set(cv::CAP_PROP_READ_TIMEOUT_MSEC, read_timeout_ms_);
+
+            if (stream_.isOpened()) {
+                std::cout << "Reconnected successfully to "
+                          << ip_address_ + ":" + port_ << " on attempt "
+                          << attempt + 1 << std::endl;
+                connected_ = true;
+                return;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Reconnect attempt " << attempt + 1
+                      << " failed: " << e.what() << std::endl;
+        }
+    }
+
+    if (stream_.isOpened()) {
+        std::cout << "Successfully reconnected to: "
+                  << ip_address_ + ":" + port_ << std::endl;
         connected_ = true;
     } else {
         std::cout << "Reconnect failed..." << std::endl;
     }
 }
 
+void RTSPStream::RequestReconnect() { reconnect_requested_ = true; }
+
 void RTSPStream::CaptureLoop() {
     while (running_) {
+        if (reconnect_requested_) {
+            reconnect_requested_ = false;
+            Reconnect();
+        }
         cv::Mat frame;
         if (stream_.read(frame)) {
             std::lock_guard<std::mutex> lock(frame_mutex_);
             current_frame_ = frame.clone();
-            connected_ = true;
         } else {
             connected_ = false;
             Reconnect();
@@ -116,6 +164,10 @@ void RTSPStream::CaptureLoop() {
         std::this_thread::sleep_for(std::chrono::milliseconds(35));  // ~30 FPS
     }
 }
+
+bool RTSPStream::IsRunning() { return running_; }
+
+bool RTSPStream::IsConnected() { return connected_; }
 
 cv::Mat RTSPStream::GetFrame() {
     std::lock_guard<std::mutex> lock(frame_mutex_);

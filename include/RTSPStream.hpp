@@ -1,5 +1,4 @@
-#ifndef INCLUDE_RTSPSTREAM_HPP_
-#define INCLUDE_RTSPSTREAM_HPP_
+#pragma once
 #include <atomic>
 #include <chrono>
 #include <mutex>
@@ -9,18 +8,9 @@
 
 class RTSPStream {
 public:
-    RTSPStream() {};
+    RTSPStream();
 
-    ~RTSPStream() {
-        running_ = false;
-        if (capture_thread_.joinable()) {
-            capture_thread_.join();
-            std::cout << "Try to close stream from " + ip_address_ + ":" + port_
-                      << std::endl;
-            stream_.release();
-            std::cout << "Stream succesfully closed!" << std::endl;
-        }
-    };
+    ~RTSPStream();
 
     void SetLogin(const std::string&);
 
@@ -38,11 +28,13 @@ public:
 
     void Reconnect();
 
+    void RequestReconnect();
+
     void CaptureLoop();
 
-    bool IsRunning() { return running_; };
+    bool IsRunning();
 
-    bool IsConnected() { return connected_; };
+    bool IsConnected();
 
     cv::Mat GetFrame();
 
@@ -55,7 +47,6 @@ private:
     std::string ip_address_ = "";
     std::string port_ = "";
     std::string source_ = "";
-    std::string rtsp_url_ = "";
     int stream_width_ = 0;
     int stream_height_ = 0;
     double stream_fps_ = 0.;
@@ -65,7 +56,11 @@ private:
     cv::Mat current_frame_;
     std::atomic<bool> running_{false};
     std::atomic<bool> connected_{false};
+    std::atomic<bool> reconnect_requested_{false};
     std::mutex frame_mutex_;
     std::thread capture_thread_;
+    int reconnect_attempts_ = 5;
+    std::vector<int> reconnect_times_{1000, 5000, 10000, 20000, 30000};
+    int open_timeout_ms_ = 5000;
+    int read_timeout_ms_ = 1000;
 };
-#endif  // INCLUDE_RTSPSTREAM_HPP_
