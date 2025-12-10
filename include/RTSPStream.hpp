@@ -42,16 +42,15 @@ public:
     RTSPStream& operator=(const RTSPStream&) = delete;
 
 private:
-    std::string login_ = "";
-    std::string password_ = "";
-    std::string ip_address_ = "";
-    std::string port_ = "";
-    std::string source_ = "";
+    std::string login_;
+    std::string password_;
+    std::string ip_address_;
+    std::string port_;
+    std::string source_;
     int stream_width_ = 0;
     int stream_height_ = 0;
     double stream_fps_ = 0.;
-    std::string stream_full_url_ = "";
-
+    std::string stream_full_url_;
     cv::VideoCapture stream_;
     cv::Mat current_frame_;
     std::atomic<bool> running_{false};
