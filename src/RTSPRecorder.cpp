@@ -50,16 +50,27 @@ bool RTSPRecorder::Initialize() {
     return false;
 }
 
-void RTSPRecorder::SetFrame(const cv::Mat& frame) { frame_ = frame.clone(); }
+void RTSPRecorder::SetFrame(const cv::Mat& frame) {
+    std::lock_guard<std::mutex> lock(frame_mutex_);
+    frame_ = frame.clone();
+}
 
 void RTSPRecorder::RecordLoop() {
     while (connected_) {
+        auto iteration_start = std::chrono::high_resolution_clock::now();
         if (video_writer_.isOpened()) {
             std::lock_guard<std::mutex> lock(frame_mutex_);
             video_writer_.write(frame_);
         } else {
             connected_ = false;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(45));  // ~20 FPS
+        auto iteration_end = std::chrono::high_resolution_clock::now();
+        auto iteration_duration =
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                iteration_end - iteration_start);
+        if (iteration_duration.count() < 50000) {
+            std::this_thread::sleep_for(std::chrono::microseconds(
+                50000 - iteration_duration.count()));  // ~20 FPS
+        }
     }
 }
