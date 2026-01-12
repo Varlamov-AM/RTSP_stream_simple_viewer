@@ -1,0 +1,28 @@
+{
+    "rtsp_streams": {
+        "stream_1": {
+            "network": {
+                "login": "login",
+                "password": "password",
+                "ip_address": "xxx.yyy.zzz.www",
+                "port": "port",
+                "source": "source"
+            }
+        }
+    },
+    "video_recorder": {
+        "record_video": false,
+        "video_path": ""
+    },
+    "display": {
+        "display_streams": true,
+        "window": {
+            "width": 1280,
+            "height": 720,
+            "grid": {
+                "col": 1,
+                "row": 1
+            }
+        }
+    }
+}
